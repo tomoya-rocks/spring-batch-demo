@@ -5,6 +5,7 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
@@ -24,10 +25,16 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public ItemWriter<Member> itemWriter() {
+	public ItemProcessor<Member, FullNameMember> itemProcessor() {
+		return new MemberItemProcessor();
+	}
+
+	@Bean
+	public ItemWriter<FullNameMember> itemWriter() {
 		return chunk -> {
-			for (Member member : chunk) {
-				System.out.println(member.id() + ":" + member.firstName() + ":" + member.lastName());
+			for (FullNameMember member : chunk) {
+				System.out.println(
+						member.id() + ":" + member.firstName() + ":" + member.lastName() + ":" + member.fullName());
 			}
 		};
 	}
@@ -39,9 +46,10 @@ public class BatchConfiguration {
 
 	@Bean
 	public Step step1(JobRepository jobRepository, DataSourceTransactionManager transactionManager,
-			ItemReader<Member> reader, ItemWriter<Member> writer) {
-		return new StepBuilder("step1", jobRepository).<Member, Member>chunk(3, transactionManager).reader(reader)
-				.writer(writer).build();
+			ItemReader<Member> reader, ItemProcessor<Member, FullNameMember> processor,
+			ItemWriter<FullNameMember> writer) {
+		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, transactionManager)
+				.reader(reader).processor(processor).writer(writer).build();
 	}
 
 }
