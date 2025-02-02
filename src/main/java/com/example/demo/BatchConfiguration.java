@@ -12,13 +12,39 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 @Configuration
 public class BatchConfiguration {
+
+	@Bean
+	@Primary
+	@ConfigurationProperties(prefix = "spring.datasource")
+	public DataSource dataSource() {
+		return DataSourceBuilder.create().build();
+	}
+
+	@Bean
+	public DataSourceTransactionManager transactionManager() {
+		return new DataSourceTransactionManager(dataSource());
+	}
+
+	@Bean
+	@ConfigurationProperties(prefix = "spring.datasource.business")
+	public DataSource businessDataSource() {
+		return DataSourceBuilder.create().build();
+	}
+
+	@Bean
+	public DataSourceTransactionManager businessTransactionManager() {
+		return new DataSourceTransactionManager(businessDataSource());
+	}
 
 	@Bean
 	public ItemReader<Member> itemReader() {
@@ -33,13 +59,13 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public ItemWriter<FullNameMember> itemWriter(DataSource dataSource) {
-		return new MemberItemWriter(dataSource);
+	public ItemWriter<FullNameMember> itemWriter() {
+		return new MemberItemWriter(businessDataSource());
 	}
 
 	@Bean
-	public StepExecutionListener stepExecutionListener(DataSource dataSource) {
-		return new MemberStepListener(dataSource);
+	public StepExecutionListener stepExecutionListener() {
+		return new MemberStepListener(businessDataSource());
 	}
 
 	@Bean
@@ -48,10 +74,10 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step memberStep(JobRepository jobRepository, DataSourceTransactionManager transactionManager,
-			ItemReader<Member> reader, ItemProcessor<Member, FullNameMember> processor,
-			ItemWriter<FullNameMember> writer, StepExecutionListener listener) {
-		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, transactionManager)
+	public Step memberStep(JobRepository jobRepository, ItemReader<Member> reader,
+			ItemProcessor<Member, FullNameMember> processor, ItemWriter<FullNameMember> writer,
+			StepExecutionListener listener) {
+		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, businessTransactionManager())
 				.reader(reader).processor(processor).writer(writer).listener(listener).build();
 	}
 
