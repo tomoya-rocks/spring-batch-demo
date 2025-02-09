@@ -7,11 +7,13 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.repository.support.ResourcelessJobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
@@ -24,15 +26,14 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 public class BatchConfiguration {
 
 	@Bean
-	@Primary
-	@ConfigurationProperties(prefix = "spring.datasource")
-	public DataSource dataSource() {
-		return DataSourceBuilder.create().build();
+	public ResourcelessTransactionManager transactionManager() {
+		return new ResourcelessTransactionManager();
 	}
 
-	@Bean
-	public DataSourceTransactionManager transactionManager() {
-		return new DataSourceTransactionManager(dataSource());
+	@Bean(name = "jobRepository")
+	@Primary
+	public JobRepository jobRepository() {
+		return new ResourcelessJobRepository();
 	}
 
 	@Bean
@@ -45,7 +46,7 @@ public class BatchConfiguration {
 	public DataSourceTransactionManager businessTransactionManager() {
 		return new DataSourceTransactionManager(businessDataSource());
 	}
-
+	
 	@Bean
 	public ItemReader<Member> itemReader() {
 		return new FlatFileItemReaderBuilder<Member>().name("memberItemReader")
