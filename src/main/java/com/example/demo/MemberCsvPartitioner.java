@@ -17,12 +17,24 @@ public class MemberCsvPartitioner implements Partitioner {
 
 	@Override
 	public Map<String, ExecutionContext> partition(int gridSize) {
-		Map<String, ExecutionContext> context = new HashMap<>();
+		Map<String, ExecutionContext> contextMap = new HashMap<>();
 
 		@SuppressWarnings("unchecked")
 		List<String> csvList = (List<String>) this.executionContext.get("csvList");
-		// TODO Auto-generated method stub
-		return null;
+
+		int partitionIndex = 0;
+		for (String csvFile : csvList) {
+			DatabaseConfig databaseConfig = new DatabaseConfig("localhost", "testuser", "testpass",
+					"testdb" + (partitionIndex + 1));
+
+			ExecutionContext context = new ExecutionContext();
+			context.put("csvFile", csvFile);
+			context.put("databaseConfig", databaseConfig);
+
+			contextMap.put("partition" + partitionIndex, context);
+		}
+
+		return contextMap;
 	}
 
 }
