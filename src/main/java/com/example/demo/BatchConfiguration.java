@@ -2,6 +2,7 @@ package com.example.demo;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.core.repository.JobRepository;
@@ -10,8 +11,8 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +42,8 @@ public class BatchConfiguration {
 	@Bean
 	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
 		return new JobBuilder("importMemberJob" + System.currentTimeMillis(), jobRepository)
-				.start(memberCsvTaskletStep(jobRepository, platformTransactionManager)).build();
+				.start(memberCsvTaskletStep(jobRepository, platformTransactionManager)).next(masterStep(jobRepository))
+				.build();
 	}
 
 	@Bean
@@ -53,30 +55,33 @@ public class BatchConfiguration {
 	@Bean
 	public Step masterStep(JobRepository jobRepository) {
 		return new StepBuilder("master", jobRepository).partitioner("slaveStep", memberCsvPartitioner()).gridSize(10)
-				.step(slaveStep(jobRepository, null, null)).taskExecutor(taskExecutor()).build();
+				.step(slaveStep(jobRepository)).taskExecutor(taskExecutor()).build();
 	}
 
 	@Bean
-	public Step slaveStep(JobRepository jobRepository, @Value("#{stepExecutionContext['csvFile']}") String csvFile,
-			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
+	public Step slaveStep(JobRepository jobRepository) {
 		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, transactionManager())
 				.reader(itemReader(null)).processor(itemProcessor()).writer(itemWriter(null)).build();
 	}
 
 	@Bean
-	public ItemReader<Member> itemReader(@Value("#{stepExecutionContext['csvFile']}") String csvFile) {
+	@StepScope
+	public FlatFileItemReader<Member> itemReader(@Value("#{stepExecutionContext['csvFile']}") String csvFile) {
 		return new FlatFileItemReaderBuilder<Member>().name("memberItemReader").resource(new ClassPathResource(csvFile))
 				.delimited().names("id", "firstName", "lastName").linesToSkip(1).targetType(Member.class).build();
 	}
 
 	@Bean
+	@StepScope
 	public ItemProcessor<Member, FullNameMember> itemProcessor() {
 		return new MemberItemProcessor();
 	}
 
 	@Bean
-	public ItemWriter<FullNameMember> itemWriter(DatabaseConfig databaseConfig) {
-		String url = String.format("jdbc:postgresql://{}/{}", databaseConfig.host(), databaseConfig.dbName());
+	@StepScope
+	public ItemWriter<FullNameMember> itemWriter(
+			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
+		String url = String.format("jdbc:postgresql://%s/%s", databaseConfig.host(), databaseConfig.dbName());
 		DriverManagerDataSource dataSource = new DriverManagerDataSource();
 		dataSource.setUrl(url);
 		dataSource.setUsername(databaseConfig.username());

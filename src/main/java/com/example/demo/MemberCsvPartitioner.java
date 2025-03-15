@@ -32,6 +32,8 @@ public class MemberCsvPartitioner implements Partitioner {
 			context.put("databaseConfig", databaseConfig);
 
 			contextMap.put("partition" + partitionIndex, context);
+			
+			partitionIndex++;
 		}
 
 		return contextMap;
