@@ -16,6 +16,7 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -40,9 +41,10 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager,
+			EntityManagerFactoryBuilder.Builder emfBuilder) {
 		return new JobBuilder("importMemberJob" + System.currentTimeMillis(), jobRepository)
-				.start(memberCsvTaskletStep(jobRepository, platformTransactionManager)).next(masterStep(jobRepository))
+				.start(memberCsvTaskletStep(jobRepository, platformTransactionManager)).next(masterStep(jobRepository, emfBuilder))
 				.build();
 	}
 
@@ -53,15 +55,15 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step masterStep(JobRepository jobRepository) {
+	public Step masterStep(JobRepository jobRepository, EntityManagerFactoryBuilder.Builder emfBuilder) {
 		return new StepBuilder("master", jobRepository).partitioner("slaveStep", memberCsvPartitioner()).gridSize(10)
-				.step(slaveStep(jobRepository)).taskExecutor(taskExecutor()).build();
+				.step(slaveStep(jobRepository, emfBuilder)).taskExecutor(taskExecutor()).build();
 	}
 
 	@Bean
-	public Step slaveStep(JobRepository jobRepository) {
+	public Step slaveStep(JobRepository jobRepository, EntityManagerFactoryBuilder.Builder emfBuilder) {
 		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, transactionManager())
-				.reader(itemReader(null)).processor(itemProcessor()).writer(itemWriter(null)).build();
+				.reader(itemReader(null)).processor(itemProcessor()).writer(itemWriter(emfBuilder, null)).build();
 	}
 
 	@Bean
@@ -79,13 +81,14 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public ItemWriter<FullNameMember> itemWriter(
+	public ItemWriter<FullNameMember> itemWriter(EntityManagerFactoryBuilder.Builder emfBuilder,
 			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
 		String url = String.format("jdbc:postgresql://%s/%s", databaseConfig.host(), databaseConfig.dbName());
 		DriverManagerDataSource dataSource = new DriverManagerDataSource();
 		dataSource.setUrl(url);
 		dataSource.setUsername(databaseConfig.username());
 		dataSource.setPassword(databaseConfig.password());
+		
 
 		return new MemberItemWriter(dataSource);
 	}
