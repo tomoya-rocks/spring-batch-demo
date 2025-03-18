@@ -36,7 +36,7 @@ public class BatchConfiguration {
 	public DataSource dataSource() {
 		return org.springframework.boot.jdbc.DataSourceBuilder.create().build();
 	}
-	
+
 	@Bean
 	@Primary
 	public DataSourceTransactionManager transactionManager() {
@@ -64,8 +64,9 @@ public class BatchConfiguration {
 
 	@Bean
 	public Step slaveStep(JobRepository jobRepository, PlatformTransactionManager dynamicTransactionManager) {
-		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, dynamicTransactionManager)
-				.reader(itemReader(null)).processor(itemProcessor()).writer(itemWriter(null)).build();
+		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, dynamicTransactionManager())
+				.listener(slaveStepExecutionListener()).reader(itemReader(null)).processor(itemProcessor())
+				.writer(itemWriter()).build();
 	}
 
 	@Bean
@@ -83,15 +84,15 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public ItemWriter<FullNameMember> itemWriter(
-			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
-		return new MemberItemWriter(dynamicDataSource(databaseConfig));
+	public ItemWriter<FullNameMember> itemWriter() {
+		return new MemberItemWriter(dynamicDataSource());
 	}
 
 	@Bean
 	@StepScope
-	public DataSource dynamicDataSource(
-			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
+	public DataSource dynamicDataSource() {
+		DatabaseConfig databaseConfig = SlaveStepExecutionListener.databaseConfig.get();
+
 		return DataSourceBuilder.create()
 				.url(String.format("jdbc:postgresql://%s/%s", databaseConfig.host(), databaseConfig.dbName()))
 				.username(databaseConfig.username()).password(databaseConfig.password())
@@ -99,9 +100,8 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	@StepScope
-	public DataSourceTransactionManager dynamicTransactionManager(DataSource dynamicDataSource) {
-		return new DataSourceTransactionManager(dynamicDataSource);
+	public DataSourceTransactionManager dynamicTransactionManager() {
+		return new DataSourceTransactionManager(dynamicDataSource());
 	}
 
 	@Bean
@@ -122,6 +122,11 @@ public class BatchConfiguration {
 	@Bean
 	public TaskExecutor taskExecutor() {
 		return new SimpleAsyncTaskExecutor();
+	}
+
+	@Bean
+	public SlaveStepExecutionListener slaveStepExecutionListener() {
+		return new SlaveStepExecutionListener();
 	}
 
 }
