@@ -1,4 +1,8 @@
 package com.example.demo;
 
-public record FullNameMember(String id, String firstName, String lastName, String fullName) {
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("MEMBER")
+public record FullNameMember(@Id String id, String firstName, String lastName, String fullName) {
 }

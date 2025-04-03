@@ -20,8 +20,8 @@ public class MemberItemWriter implements ItemWriter<FullNameMember> {
 		for (FullNameMember fullNameMember : chunk) {
 			String sql = "insert into member values (?, ?, ?, ?)";
 
-			this.jdbcTemplate.update(sql, fullNameMember.id(), fullNameMember.firstName(), fullNameMember.lastName(),
-					fullNameMember.fullName());
+			this.jdbcTemplate.update(sql, fullNameMember.id(), fullNameMember.firstName(),
+					fullNameMember.lastName(), fullNameMember.fullName());
 		}
 	}
 

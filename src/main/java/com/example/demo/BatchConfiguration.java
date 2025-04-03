@@ -17,7 +17,6 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -46,8 +45,7 @@ public class BatchConfiguration {
 	@Bean
 	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
 		return new JobBuilder("importMemberJob" + System.currentTimeMillis(), jobRepository)
-				.start(memberCsvTaskletStep(jobRepository, transactionManager))
-				.next(masterStep(jobRepository, transactionManager)).build();
+				.start(memberCsvTaskletStep(jobRepository, transactionManager)).next(masterStep(jobRepository)).build();
 	}
 
 	@Bean
@@ -57,14 +55,14 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step masterStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+	public Step masterStep(JobRepository jobRepository) {
 		return new StepBuilder("master", jobRepository).partitioner("slaveStep", memberCsvPartitioner()).gridSize(10)
-				.step(slaveStep(jobRepository, transactionManager)).taskExecutor(taskExecutor()).build();
+				.step(slaveStep(jobRepository)).taskExecutor(taskExecutor()).build();
 	}
 
 	@Bean
-	public Step slaveStep(JobRepository jobRepository, PlatformTransactionManager dynamicTransactionManager) {
-		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, dynamicTransactionManager())
+	public Step slaveStep(JobRepository jobRepository) {
+		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, dynamicTransactionManager())
 				.listener(slaveStepExecutionListener()).reader(itemReader(null)).processor(itemProcessor())
 				.writer(itemWriter()).build();
 	}
@@ -90,18 +88,25 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public DataSource dynamicDataSource() {
-		DatabaseConfig databaseConfig = SlaveStepExecutionListener.databaseConfig.get();
+	public ItemWriter<FullNameMember> springDataJdbcItemWriter(
+			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
+		return new SpringDataJdbcMemberItemWriter(databaseConfig.dbName());
+	}
 
-		return DataSourceBuilder.create()
-				.url(String.format("jdbc:postgresql://%s/%s", databaseConfig.host(), databaseConfig.dbName()))
-				.username(databaseConfig.username()).password(databaseConfig.password())
-				.driverClassName("org.postgresql.Driver").build();
+	@Bean
+	@StepScope
+	public DataSource dynamicDataSource() {
+		return dynamicRoutingDataSource().determineTargetDataSource();
 	}
 
 	@Bean
 	public DataSourceTransactionManager dynamicTransactionManager() {
 		return new DataSourceTransactionManager(dynamicDataSource());
+	}
+
+	@Bean
+	public DynamicRoutingDataSource dynamicRoutingDataSource() {
+		return new DynamicRoutingDataSource();
 	}
 
 	@Bean
@@ -116,7 +121,7 @@ public class BatchConfiguration {
 
 	@Bean
 	public Partitioner memberCsvPartitioner() {
-		return new MemberCsvPartitioner(exectionContext());
+		return new MemberCsvPartitioner(exectionContext(), dynamicRoutingDataSource());
 	}
 
 	@Bean
