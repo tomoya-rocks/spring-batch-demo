@@ -1,4 +1,6 @@
 package com.example.demo;
 
-public record Member(String id, String firstName, String lastName) {
+import jakarta.validation.constraints.NotBlank;
+
+public record Member(@NotBlank String id, @NotBlank String firstName, @NotBlank String lastName) {
 }
