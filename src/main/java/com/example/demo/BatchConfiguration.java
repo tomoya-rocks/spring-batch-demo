@@ -10,10 +10,12 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
+@Import(value = { JobRepositoryConfiguration.class })
 public class BatchConfiguration {
 
 	@Bean
@@ -38,7 +40,7 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step step1(JobRepository jobRepository, DataSourceTransactionManager transactionManager,
+	public Step step1(JobRepository jobRepository, PlatformTransactionManager transactionManager,
 			ItemReader<Member> reader, ItemWriter<Member> writer) {
 		return new StepBuilder("step1", jobRepository).<Member, Member>chunk(3, transactionManager).reader(reader)
 				.writer(writer).build();
