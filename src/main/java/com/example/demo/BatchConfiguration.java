@@ -1,7 +1,10 @@
 package com.example.demo;
 
+import javax.sql.DataSource;
+
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
@@ -16,7 +19,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
-@Import(value = { JobRepositoryConfiguration.class })
+@Import(value = { JobRepositoryConfiguration.class, BusinessDataSourceConfiguration.class })
 public class BatchConfiguration {
 
 	@Bean
@@ -32,13 +35,13 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public ItemWriter<FullNameMember> itemWriter() {
-		return chunk -> {
-			for (FullNameMember member : chunk) {
-				System.out.println(
-						member.id() + ":" + member.firstName() + ":" + member.lastName() + ":" + member.fullName());
-			}
-		};
+	public ItemWriter<FullNameMember> itemWriter(DataSource businessDataSource) {
+		return new MemberItemWriter(businessDataSource);
+	}
+
+	@Bean
+	public StepExecutionListener stepExecutionListener(DataSource businessDataSource) {
+		return new MemberStepListener(businessDataSource);
 	}
 
 	@Bean
@@ -47,11 +50,11 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step step1(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+	public Step memberStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
 			ItemReader<Member> reader, ItemProcessor<Member, FullNameMember> processor,
-			ItemWriter<FullNameMember> writer) {
+			ItemWriter<FullNameMember> writer, StepExecutionListener listener) {
 		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, transactionManager)
-				.reader(reader).processor(processor).writer(writer).build();
+				.reader(reader).processor(processor).writer(writer).listener(listener).build();
 	}
 
 }
