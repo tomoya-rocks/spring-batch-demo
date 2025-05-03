@@ -12,7 +12,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 public class BusinessDataSourceConfiguration {
 
 	@Bean
-	@ConfigurationProperties(prefix = "spring.business.datasource")
+	@ConfigurationProperties(prefix = "spring.datasource.business")
 	public DataSource businessDataSource() {
 		return DataSourceBuilder.create().build();
 	}

@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
@@ -50,10 +51,10 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step memberStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
-			ItemReader<Member> reader, ItemProcessor<Member, FullNameMember> processor,
-			ItemWriter<FullNameMember> writer, StepExecutionListener listener) {
-		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, transactionManager)
+	public Step memberStep(JobRepository jobRepository, ItemReader<Member> reader,
+			ItemProcessor<Member, FullNameMember> processor, ItemWriter<FullNameMember> writer,
+			StepExecutionListener listener, PlatformTransactionManager platformTransactionManager) {
+		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, platformTransactionManager)
 				.reader(reader).processor(processor).writer(writer).listener(listener).build();
 	}
 

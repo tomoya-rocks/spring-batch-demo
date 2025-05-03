@@ -11,7 +11,7 @@ public class JobRepositoryConfiguration {
 
 	@Bean
 	@Primary
-	public ResourcelessTransactionManager transactionManager() {
+	public ResourcelessTransactionManager platformTransactionManager() {
 		return new ResourcelessTransactionManager();
 	}
 
