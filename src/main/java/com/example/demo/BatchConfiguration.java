@@ -11,13 +11,17 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import jakarta.persistence.EntityManagerFactory;
 
 @Configuration
 @Import(value = { JobRepositoryConfiguration.class, BusinessDataSourceConfiguration.class })
@@ -36,12 +40,22 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public ItemWriter<FullNameMember> itemWriter(DataSource businessDataSource) {
+	public ItemWriter<FullNameMember> itemWriter(
+			@Qualifier(value = "businessDataSource") DataSource businessDataSource) {
 		return new MemberItemWriter(businessDataSource);
 	}
 
 	@Bean
-	public StepExecutionListener stepExecutionListener(DataSource businessDataSource) {
+	@Qualifier(value = "jpaItemWriter")
+	public ItemWriter<FullNameMember> jpaItemWriter(
+			@Qualifier(value = "entityManagerFactory") EntityManagerFactory entityManagerFactory) {
+		return new JpaItemWriterBuilder<FullNameMember>().entityManagerFactory(entityManagerFactory).usePersist(true)
+				.build();
+	}
+
+	@Bean
+	public StepExecutionListener stepExecutionListener(
+			@Qualifier(value = "businessDataSource") DataSource businessDataSource) {
 		return new MemberStepListener(businessDataSource);
 	}
 
@@ -52,9 +66,10 @@ public class BatchConfiguration {
 
 	@Bean
 	public Step memberStep(JobRepository jobRepository, ItemReader<Member> reader,
-			ItemProcessor<Member, FullNameMember> processor, ItemWriter<FullNameMember> writer,
-			StepExecutionListener listener, PlatformTransactionManager platformTransactionManager) {
-		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, platformTransactionManager)
+			ItemProcessor<Member, FullNameMember> processor,
+			@Qualifier(value = "jpaItemWriter") ItemWriter<FullNameMember> writer, StepExecutionListener listener,
+			@Qualifier(value = "businessJpaTransactionManager") PlatformTransactionManager businessTransactionManager) {
+		return new StepBuilder("step1", jobRepository).<Member, FullNameMember>chunk(3, businessTransactionManager)
 				.reader(reader).processor(processor).writer(writer).listener(listener).build();
 	}
 

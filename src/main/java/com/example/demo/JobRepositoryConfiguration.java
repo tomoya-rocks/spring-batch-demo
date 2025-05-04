@@ -1,24 +1,27 @@
 package com.example.demo;
 
-import org.springframework.batch.core.repository.support.ResourcelessJobRepository;
-import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
+import javax.sql.DataSource;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 @Configuration
 public class JobRepositoryConfiguration {
 
 	@Bean
 	@Primary
-	public ResourcelessTransactionManager platformTransactionManager() {
-		return new ResourcelessTransactionManager();
+	@ConfigurationProperties(prefix = "spring.datasource")
+	public DataSource dataSource() {
+		return org.springframework.boot.jdbc.DataSourceBuilder.create().build();
 	}
 
-	@Bean(name = "jobRepository")
+	@Bean
 	@Primary
-	public ResourcelessJobRepository jobRepository() {
-		return new ResourcelessJobRepository();
+	public DataSourceTransactionManager transactionManager() {
+		return new DataSourceTransactionManager(dataSource());
 	}
 
 }
