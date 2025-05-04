@@ -1,8 +1,12 @@
 package com.example.demo;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-@Table("MEMBER")
-public record FullNameMember(@Id String id, String firstName, String lastName, String fullName) {
+@Entity
+@Table(name = "member")
+public record FullNameMember(@Id @Column(name = "id") String id, @Column(name = "first_name") String firstName,
+		@Column(name = "last_name") String lastName, @Column(name = "full_name") String fullName) {
 }

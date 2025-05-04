@@ -13,8 +13,10 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.builder.JpaItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +26,12 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import jakarta.persistence.EntityManagerFactory;
 
 @Configuration
 public class BatchConfiguration {
@@ -62,9 +69,9 @@ public class BatchConfiguration {
 
 	@Bean
 	public Step slaveStep(JobRepository jobRepository) {
-		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, dynamicTransactionManager())
+		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, businessJpaTransactionManager())
 				.listener(slaveStepExecutionListener()).reader(itemReader(null)).processor(itemProcessor())
-				.writer(itemWriter()).build();
+				.writer(jpaItemWriter()).build();
 	}
 
 	@Bean
@@ -84,13 +91,6 @@ public class BatchConfiguration {
 	@StepScope
 	public ItemWriter<FullNameMember> itemWriter() {
 		return new MemberItemWriter(dynamicDataSource());
-	}
-
-	@Bean
-	@StepScope
-	public ItemWriter<FullNameMember> springDataJdbcItemWriter(
-			@Value("#{stepExecutionContext['databaseConfig']}") DatabaseConfig databaseConfig) {
-		return new SpringDataJdbcMemberItemWriter(databaseConfig.dbName());
 	}
 
 	@Bean
@@ -132,6 +132,35 @@ public class BatchConfiguration {
 	@Bean
 	public SlaveStepExecutionListener slaveStepExecutionListener() {
 		return new SlaveStepExecutionListener();
+	}
+
+	@Bean
+	@Qualifier(value = "entityManagerFactory")
+	@StepScope
+	public EntityManagerFactory entityManagerFactory() {
+		LocalContainerEntityManagerFactoryBean localContainerEntityManagerFactoryBean = new LocalContainerEntityManagerFactoryBean();
+
+		localContainerEntityManagerFactoryBean.setDataSource(dynamicDataSource());
+		localContainerEntityManagerFactoryBean.setPackagesToScan("com.example.demo");
+		localContainerEntityManagerFactoryBean.setPersistenceUnitName("businessEntityManagerFactory");
+		localContainerEntityManagerFactoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+		localContainerEntityManagerFactoryBean.afterPropertiesSet();
+
+		return localContainerEntityManagerFactoryBean.getObject();
+	}
+
+	@Bean
+	@Qualifier(value = "businessJpaTransactionManager")
+	public JpaTransactionManager businessJpaTransactionManager() {
+		return new JpaTransactionManager(entityManagerFactory());
+	}
+
+	@Bean
+	@Qualifier(value = "jpaItemWriter")
+	@StepScope
+	public ItemWriter<FullNameMember> jpaItemWriter() {
+		return new JpaItemWriterBuilder<FullNameMember>().entityManagerFactory(entityManagerFactory()).usePersist(true)
+				.build();
 	}
 
 }
