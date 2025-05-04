@@ -18,41 +18,29 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
-import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import jakarta.persistence.EntityManagerFactory;
 
 @Configuration
+@Import(value = { DataSourceConfiguration.class })
 public class BatchConfiguration {
 
 	@Bean
-	@Primary
-	@ConfigurationProperties(prefix = "spring.datasource")
-	public DataSource dataSource() {
-		return org.springframework.boot.jdbc.DataSourceBuilder.create().build();
-	}
-
-	@Bean
-	@Primary
-	public DataSourceTransactionManager transactionManager() {
-		return new DataSourceTransactionManager(dataSource());
-	}
-
-	@Bean
-	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+	public Job importMemberJob(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+			@Qualifier(value = "entityManagerFactory") EntityManagerFactory emf,
+			@Qualifier(value = "businessJpaTransactionManager") JpaTransactionManager jpaTransactionManager,
+			@Qualifier(value = "dynamicRoutingDataSource") DynamicRoutingDataSource dynamicRoutingDataSource) {
 		return new JobBuilder("importMemberJob" + System.currentTimeMillis(), jobRepository)
-				.start(memberCsvTaskletStep(jobRepository, transactionManager)).next(masterStep(jobRepository)).build();
+				.start(memberCsvTaskletStep(jobRepository, transactionManager))
+				.next(masterStep(jobRepository, emf, jpaTransactionManager, dynamicRoutingDataSource)).build();
 	}
 
 	@Bean
@@ -62,16 +50,22 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step masterStep(JobRepository jobRepository) {
-		return new StepBuilder("master", jobRepository).partitioner("slaveStep", memberCsvPartitioner()).gridSize(10)
-				.step(slaveStep(jobRepository)).taskExecutor(taskExecutor()).build();
+	public Step masterStep(JobRepository jobRepository,
+			@Qualifier(value = "entityManagerFactory") EntityManagerFactory emf,
+			@Qualifier(value = "businessJpaTransactionManager") JpaTransactionManager jpaTransactionManager,
+			@Qualifier(value = "dynamicRoutingDataSource") DynamicRoutingDataSource dynamicRoutingDataSource) {
+		return new StepBuilder("master", jobRepository)
+				.partitioner("slaveStep", memberCsvPartitioner(dynamicRoutingDataSource)).gridSize(10)
+				.step(slaveStep(jobRepository, emf, jpaTransactionManager)).taskExecutor(taskExecutor()).build();
 	}
 
 	@Bean
-	public Step slaveStep(JobRepository jobRepository) {
-		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, businessJpaTransactionManager())
+	public Step slaveStep(JobRepository jobRepository,
+			@Qualifier(value = "entityManagerFactory") EntityManagerFactory emf,
+			@Qualifier(value = "businessJpaTransactionManager") JpaTransactionManager jpaTransactionManager) {
+		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, jpaTransactionManager)
 				.listener(slaveStepExecutionListener()).reader(itemReader(null)).processor(itemProcessor())
-				.writer(jpaItemWriter()).build();
+				.writer(jpaItemWriter(emf)).build();
 	}
 
 	@Bean
@@ -89,24 +83,8 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public ItemWriter<FullNameMember> itemWriter() {
-		return new MemberItemWriter(dynamicDataSource());
-	}
-
-	@Bean
-	@StepScope
-	public DataSource dynamicDataSource() {
-		return dynamicRoutingDataSource().determineTargetDataSource();
-	}
-
-	@Bean
-	public DataSourceTransactionManager dynamicTransactionManager() {
-		return new DataSourceTransactionManager(dynamicDataSource());
-	}
-
-	@Bean
-	public DynamicRoutingDataSource dynamicRoutingDataSource() {
-		return new DynamicRoutingDataSource();
+	public ItemWriter<FullNameMember> itemWriter(@Qualifier(value = "dynamicDataSource") DataSource dynamicDataSource) {
+		return new MemberItemWriter(dynamicDataSource);
 	}
 
 	@Bean
@@ -120,8 +98,9 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Partitioner memberCsvPartitioner() {
-		return new MemberCsvPartitioner(exectionContext(), dynamicRoutingDataSource());
+	public Partitioner memberCsvPartitioner(
+			@Qualifier(value = "dynamicRoutingDataSource") DynamicRoutingDataSource dynamicRoutingDataSource) {
+		return new MemberCsvPartitioner(exectionContext(), dynamicRoutingDataSource);
 	}
 
 	@Bean
@@ -135,32 +114,11 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	@Qualifier(value = "entityManagerFactory")
-	@StepScope
-	public EntityManagerFactory entityManagerFactory() {
-		LocalContainerEntityManagerFactoryBean localContainerEntityManagerFactoryBean = new LocalContainerEntityManagerFactoryBean();
-
-		localContainerEntityManagerFactoryBean.setDataSource(dynamicDataSource());
-		localContainerEntityManagerFactoryBean.setPackagesToScan("com.example.demo");
-		localContainerEntityManagerFactoryBean.setPersistenceUnitName("businessEntityManagerFactory");
-		localContainerEntityManagerFactoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-		localContainerEntityManagerFactoryBean.afterPropertiesSet();
-
-		return localContainerEntityManagerFactoryBean.getObject();
-	}
-
-	@Bean
-	@Qualifier(value = "businessJpaTransactionManager")
-	public JpaTransactionManager businessJpaTransactionManager() {
-		return new JpaTransactionManager(entityManagerFactory());
-	}
-
-	@Bean
 	@Qualifier(value = "jpaItemWriter")
 	@StepScope
-	public ItemWriter<FullNameMember> jpaItemWriter() {
-		return new JpaItemWriterBuilder<FullNameMember>().entityManagerFactory(entityManagerFactory()).usePersist(true)
-				.build();
+	public ItemWriter<FullNameMember> jpaItemWriter(
+			@Qualifier(value = "entityManagerFactory") EntityManagerFactory emf) {
+		return new JpaItemWriterBuilder<FullNameMember>().entityManagerFactory(emf).usePersist(true).build();
 	}
 
 }
