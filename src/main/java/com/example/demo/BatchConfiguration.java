@@ -21,14 +21,15 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import(value = { DataSourceConfiguration.class, StrategyConfiguration.class })
 public class BatchConfiguration {
 
+	@SuppressWarnings("rawtypes")
 	@Bean
-	public Job importMemberJob(JobRepository jobRepository, HandleMemberCsvStrategy handleMemberCsvStrategy,
+	public Job importMemberJob(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "transactionManager") PlatformTransactionManager transactionManager,
 			@Qualifier(value = "dynamicTransactionManager") DataSourceTransactionManager dynamicTransactionManager,
 			@Qualifier(value = "dynamicRoutingDataSource") DynamicRoutingDataSource dynamicRoutingDataSource) {
 		return new JobBuilder("importMemberJob" + System.currentTimeMillis(), jobRepository)
 				.start(memberCsvTaskletStep(jobRepository, transactionManager)).next(masterStep(jobRepository,
-						handleMemberCsvStrategy, dynamicTransactionManager, dynamicRoutingDataSource))
+						handleCsvStrategyFactory, dynamicTransactionManager, dynamicRoutingDataSource))
 				.build();
 	}
 
@@ -39,22 +40,25 @@ public class BatchConfiguration {
 				.build();
 	}
 
+	@SuppressWarnings("rawtypes")
 	@Bean
-	public Step masterStep(JobRepository jobRepository, HandleMemberCsvStrategy handleMemberCsvStrategy,
+	public Step masterStep(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "dynamicTransactionManager") DataSourceTransactionManager dynamicTransactionManager,
 			@Qualifier(value = "dynamicRoutingDataSource") DynamicRoutingDataSource dynamicRoutingDataSource) {
 		return new StepBuilder("master", jobRepository)
 				.partitioner("slaveStep", memberCsvPartitioner(dynamicRoutingDataSource)).gridSize(10)
-				.step(slaveStep(jobRepository, handleMemberCsvStrategy, dynamicTransactionManager))
+				.step(slaveStep(jobRepository, handleCsvStrategyFactory, dynamicTransactionManager))
 				.taskExecutor(taskExecutor()).build();
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Bean
-	public Step slaveStep(JobRepository jobRepository, HandleMemberCsvStrategy handleMemberCsvStrategy,
+	public Step slaveStep(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "dynamicTransactionManager") DataSourceTransactionManager dynamicTransactionManager) {
+		HandleCsvStrategy handleCsvStrategy = handleCsvStrategyFactory.createHandleCsvStrategy("handleMemberCsvStrategy");
 		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, dynamicTransactionManager)
-				.listener(slaveStepExecutionListener()).reader(handleMemberCsvStrategy.itemReader())
-				.processor(handleMemberCsvStrategy.itemProcessor()).writer(handleMemberCsvStrategy.itemWriter())
+				.listener(slaveStepExecutionListener()).reader(handleCsvStrategy.itemReader())
+				.processor(handleCsvStrategy.itemProcessor()).writer(handleCsvStrategy.itemWriter())
 				.build();
 	}
 

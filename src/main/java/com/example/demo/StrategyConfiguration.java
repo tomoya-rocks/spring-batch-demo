@@ -1,5 +1,7 @@
 package com.example.demo;
 
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -22,6 +24,17 @@ public class StrategyConfiguration {
 	public HandleMemberCsvStrategy handleMemberCsvStrategy(FlatFileItemReader<Member> itemReader,
 			ItemProcessor<Member, FullNameMember> itemProcessor, ItemWriter<FullNameMember> itemWriter) {
 		return new HandleMemberCsvStrategy(itemReader, itemProcessor, itemWriter);
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@Bean
+	public HandleCsvStrategyFactory handleCsvStrategyFactory(FlatFileItemReader itemReader,
+			ItemProcessor<?, ?> itemProcessor, ItemWriter<?> itemWriter) {
+		List<?> strategies = List.of(handleMemberCsvStrategy((FlatFileItemReader<Member>) itemReader,
+				(ItemProcessor<Member, FullNameMember>) itemProcessor, (ItemWriter<FullNameMember>) itemWriter));
+		HandleCsvStrategyFactory handleCsvStrategyFactory = new HandleCsvStrategyFactory(strategies);
+
+		return handleCsvStrategyFactory;
 	}
 
 	@Bean
