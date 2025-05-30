@@ -8,6 +8,9 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +24,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import(value = { DataSourceConfiguration.class, StrategyConfiguration.class })
 public class BatchConfiguration {
 
-	@SuppressWarnings("rawtypes")
 	@Bean
 	public Job importMemberJob(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "transactionManager") PlatformTransactionManager transactionManager,
@@ -40,7 +42,6 @@ public class BatchConfiguration {
 				.build();
 	}
 
-	@SuppressWarnings("rawtypes")
 	@Bean
 	public Step masterStep(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "dynamicTransactionManager") DataSourceTransactionManager dynamicTransactionManager,
@@ -51,15 +52,17 @@ public class BatchConfiguration {
 				.taskExecutor(taskExecutor()).build();
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@SuppressWarnings({ "unchecked" })
 	@Bean
 	public Step slaveStep(JobRepository jobRepository, HandleCsvStrategyFactory handleCsvStrategyFactory,
 			@Qualifier(value = "dynamicTransactionManager") DataSourceTransactionManager dynamicTransactionManager) {
-		HandleCsvStrategy handleCsvStrategy = handleCsvStrategyFactory.createHandleCsvStrategy("handleMemberCsvStrategy");
+		HandleCsvStrategy handleCsvStrategy = handleCsvStrategyFactory
+				.createHandleCsvStrategy("handleMemberCsvStrategy");
 		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5, dynamicTransactionManager)
-				.listener(slaveStepExecutionListener()).reader(handleCsvStrategy.itemReader())
-				.processor(handleCsvStrategy.itemProcessor()).writer(handleCsvStrategy.itemWriter())
-				.build();
+				.listener(slaveStepExecutionListener())
+				.reader((ItemReader<? extends Member>) handleCsvStrategy.itemReader())
+				.processor((ItemProcessor<? super Member, ? extends FullNameMember>) handleCsvStrategy.itemProcessor())
+				.writer((ItemWriter<? super FullNameMember>) handleCsvStrategy.itemWriter()).build();
 	}
 
 	@Bean

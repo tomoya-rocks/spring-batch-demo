@@ -26,11 +26,11 @@ public class StrategyConfiguration {
 		return new HandleMemberCsvStrategy(itemReader, itemProcessor, itemWriter);
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@SuppressWarnings({ "unchecked" })
 	@Bean
-	public HandleCsvStrategyFactory handleCsvStrategyFactory(FlatFileItemReader itemReader,
+	public HandleCsvStrategyFactory handleCsvStrategyFactory(FlatFileItemReader<?> itemReader,
 			ItemProcessor<?, ?> itemProcessor, ItemWriter<?> itemWriter) {
-		List<?> strategies = List.of(handleMemberCsvStrategy((FlatFileItemReader<Member>) itemReader,
+		List<HandleCsvStrategy> strategies = List.of(handleMemberCsvStrategy((FlatFileItemReader<Member>) itemReader,
 				(ItemProcessor<Member, FullNameMember>) itemProcessor, (ItemWriter<FullNameMember>) itemWriter));
 		HandleCsvStrategyFactory handleCsvStrategyFactory = new HandleCsvStrategyFactory(strategies);
 

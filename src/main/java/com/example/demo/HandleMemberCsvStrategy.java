@@ -6,7 +6,7 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.stereotype.Component;
 
 @Component("handleMemberCsvStrategy")
-public class HandleMemberCsvStrategy implements HandleCsvStrategy<Member, FullNameMember> {
+public class HandleMemberCsvStrategy implements HandleCsvStrategy {
 
 	private final FlatFileItemReader<Member> itemReader;
 

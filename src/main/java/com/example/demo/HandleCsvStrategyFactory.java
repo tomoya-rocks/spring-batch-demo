@@ -6,18 +6,17 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
-public class HandleCsvStrategyFactory<I, O> {
+public class HandleCsvStrategyFactory {
 
-	private final Map<Object, Object> strategyMap;
+	private final Map<String, HandleCsvStrategy> strategyMap;
 
-	public HandleCsvStrategyFactory(List<HandleCsvStrategy<I, O>> strategies) {
+	public HandleCsvStrategyFactory(List<HandleCsvStrategy> strategies) {
 		this.strategyMap = strategies.stream()
 				.collect(Collectors.toMap(s -> s.getClass().getAnnotation(Component.class).value(), s -> s));
 	}
 
-	@SuppressWarnings("unchecked")
-	public HandleCsvStrategy<I, O> createHandleCsvStrategy(String name) {
-		return (HandleCsvStrategy<I, O>) this.strategyMap.get(name);
+	public HandleCsvStrategy createHandleCsvStrategy(String name) {
+		return this.strategyMap.get(name);
 	}
 
 }

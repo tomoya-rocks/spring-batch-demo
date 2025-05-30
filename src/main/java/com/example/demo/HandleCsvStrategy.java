@@ -4,12 +4,12 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 
-public interface HandleCsvStrategy<I, O> {
+public interface HandleCsvStrategy {
 
-	FlatFileItemReader<I> itemReader();
+	FlatFileItemReader<?> itemReader();
 
-	ItemProcessor<I, O> itemProcessor();
+	ItemProcessor<?, ?> itemProcessor();
 
-	ItemWriter<O> itemWriter();
+	ItemWriter<?> itemWriter();
 
 }
