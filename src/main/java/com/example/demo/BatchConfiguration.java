@@ -22,9 +22,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.retry.backoff.ExponentialBackOffPolicy;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
@@ -66,7 +68,8 @@ public class BatchConfiguration {
 	public Step slaveStep(JobRepository jobRepository, PlatformTransactionManager dynamicTransactionManager) {
 		return new StepBuilder("slave", jobRepository).<Member, FullNameMember>chunk(5000, dynamicTransactionManager())
 				.listener(slaveStepExecutionListener()).reader(itemReader(null)).processor(itemProcessor())
-				.writer(itemWriter()).build();
+				.writer(itemWriter()).faultTolerant().retryLimit(9).retry(CannotCreateTransactionException.class)
+				.backOffPolicy(new ExponentialBackOffPolicy()).build();
 	}
 
 	@Bean
@@ -121,7 +124,7 @@ public class BatchConfiguration {
 
 	@Bean
 	public TaskExecutor taskExecutor() {
-		return new SimpleAsyncTaskExecutor();
+		return new SyncTaskExecutor();
 	}
 
 	@Bean
